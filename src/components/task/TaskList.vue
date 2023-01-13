@@ -3,9 +3,10 @@ import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
 import { Icon } from '@iconify/vue'
 import draggable from 'vuedraggable'
+import { isSmartProject } from 'services/task'
+import Command from '../command/Command.vue'
 import TaskItem from './TaskItem.vue'
 import {
-  SmartProjectNames,
   useTaskLeftMenuStatusStore,
   useTaskStore,
   useThemeStore,
@@ -54,13 +55,8 @@ function handleInputChange(event: any) {
 }
 
 const shouldShowTodoAdd = computed(() => {
-  const name = taskStore.currentActiveProject?.name
-  return (
-    name !== (SmartProjectNames.Complete as string)
-    && name !== SmartProjectNames.Trash
-    && name !== SmartProjectNames.Failed
-    && name !== SmartProjectNames.Abstract
-  )
+  const name = taskStore.currentActiveProject?.name || ''
+  return !isSmartProject(name)
 })
 
 const { inputRef, onFocus } = useInput()
@@ -128,6 +124,7 @@ const { inputRef, onFocus } = useInput()
     </draggable>
     <!-- 暂时性修复 contenteditable 的 bug #9 -->
     <div class="w-full h-1px" contenteditable="false" />
+    <Command />
   </div>
 </template>
 

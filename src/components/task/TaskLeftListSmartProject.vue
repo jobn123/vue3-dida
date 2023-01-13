@@ -1,45 +1,46 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { reactive } from 'vue'
+import { NPopover } from 'naive-ui'
+import { ref } from 'vue'
+import type { SmartProjectNames } from '@/store'
 import {
-  SmartProjectNames,
   useProjectSelectedStatusStore,
+  useSettingsStore,
   useTaskStore,
 } from '@/store'
 
-interface TaskListType {
+export interface TaskListType {
   key: number
   icon: string
   title: `${SmartProjectNames}`
+  option?: string
 }
 
-const taskList = reactive<TaskListType[]>([
-  {
-    key: 1,
-    icon: 'material-symbols:check-box',
-    title: SmartProjectNames.Complete,
-  },
-  {
-    key: 2,
-    icon: 'mdi:close-box',
-    title: SmartProjectNames.Failed,
-  },
-  {
-    key: 3,
-    icon: 'material-symbols:delete',
-    title: SmartProjectNames.Trash,
-  },
-  {
-    key: 4,
-    icon: 'material-symbols:text-snippet-rounded',
-    title: SmartProjectNames.Abstract,
-  },
-])
+function useProjectMoreActions() {
+  const showMoreIconIndex = ref<number>(-1)
+  const showWitchPopover = ref<number>(-1)
 
+  const openPopover = (key: number) => {
+    showWitchPopover.value = key
+  }
+
+  return {
+    showMoreIconIndex,
+    showWitchPopover,
+    openPopover,
+  }
+}
+
+const settingsStore = useSettingsStore()
 const selected = 'bg-[#E7F5EE] dark:bg-[#233633]'
 
 const taskStore = useTaskStore()
 const projectSelectedStatusStore = useProjectSelectedStatusStore()
+const {
+  showMoreIconIndex,
+  showWitchPopover,
+  openPopover,
+} = useProjectMoreActions()
 
 const handleTaskItemClick = (projectName: string, key: number) => {
   taskStore.changeCurrentActiveProject(projectName)
@@ -50,16 +51,18 @@ const handleTaskItemClick = (projectName: string, key: number) => {
 <template>
   <ul>
     <li
-      v-for="item in taskList"
-      :key="item.key"
+      v-for="(item, key) in settingsStore.visibleSmartProjects"
+      :key="key"
       li_common
       pl-4
       pr-2
       hover="bg-[#F3F3F5] dark:bg-[#2D2D30]"
       :class="
-        projectSelectedStatusStore.selectedKey[0] === item.key ? selected : ''
+        projectSelectedStatusStore.selectedKey[0] === key ? selected : ''
       "
-      @click="handleTaskItemClick(item.title, item.key)"
+      @click="handleTaskItemClick(item.title, key)"
+      @mouseenter="showMoreIconIndex = key"
+      @mouseleave="showMoreIconIndex = -1"
     >
       <div flex>
         <Icon
@@ -71,13 +74,45 @@ const handleTaskItemClick = (projectName: string, key: number) => {
         <span class="ml-2">{{ item.title }}</span>
       </div>
 
-      <Icon
-        v-show="projectSelectedStatusStore.selectedKey[0] === item.key"
-        icon="material-symbols:more-horiz"
-        width="20"
-        class="color-[#9D9FA3]"
-        dark="color-white"
-      />
+      <NPopover
+        trigger="click"
+        style="padding: 5px 0 5px 0"
+        :show="showWitchPopover === key"
+        :show-arrow="false"
+        placement="bottom-start"
+        @clickoutside="showWitchPopover = -1"
+      >
+        <template #trigger>
+          <Icon
+            v-show="
+              projectSelectedStatusStore.selectedKey[0] === key
+                || showMoreIconIndex === key
+            "
+            icon="material-symbols:more-horiz"
+            width="20"
+            class="color-[#9D9FA3]"
+            dark="color-white"
+            @click="
+              ($event) => {
+                $event.stopPropagation();
+                openPopover(key);
+              }
+            "
+          />
+        </template>
+        <ul w-180px cursor-pointer>
+          <li
+            hover="bg-[#F3F3F5] dark:bg-[#2D2D30]"
+            pl-4
+            text-14px
+            h-20px
+            lh-20px
+            @click="settingsStore.setHideSmartProject(item)"
+          >
+            隐藏
+          </li>
+        </ul>
+      </NPopover>
     </li>
   </ul>
 </template>

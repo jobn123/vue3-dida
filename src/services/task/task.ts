@@ -1,5 +1,5 @@
-import type { Project } from './project'
-import { completedSmartProject, trashProject } from './smartProject'
+import type { ListProject } from './listProject'
+import { completedSmartProject, trashSmartProject } from './smartProject'
 
 export enum TaskState {
   ACTIVE = 1,
@@ -13,8 +13,8 @@ export interface Task {
   title: string
   state: TaskState
   content: string
-  project?: Project
-  previousProject?: Project
+  project?: ListProject
+  previousProject?: ListProject
 }
 
 export function createTask(
@@ -30,7 +30,7 @@ export function createTask(
   }
 }
 
-export function addTask(task: Task, project: Project) {
+export function addTask(task: Task, project: ListProject) {
   task.project = project
   task.state = TaskState.ACTIVE
   project.tasks.unshift(task)
@@ -38,7 +38,7 @@ export function addTask(task: Task, project: Project) {
 
 export function removeTask(task: Task) {
   _removeTaskFromProject(task)
-  addTask(task, trashProject)
+  addTask(task, trashSmartProject)
   task.state = TaskState.REMOVED
 }
 
