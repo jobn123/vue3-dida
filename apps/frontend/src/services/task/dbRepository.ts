@@ -1,34 +1,37 @@
+import type { PromiseExtended } from 'dexie'
 import { TaskState } from './task'
 import { getDB } from '@/db'
-
-export interface Task {
-  id?: number
-  title: string
-  content: string
-  projectId: number
-  state: number
-}
-
-export interface Project {
-  id?: number
-  name: string
-}
+import type { ProjectTable, TagTable, TaskTable } from '@/db/types'
 
 export interface Repository {
-  loadProjects: () => Promise<Project[]>
-  getTasks: (projectId: number) => Promise<Task[]>
-  getAllTasks: () => Promise<Task[]>
-  findTasksByState: (state: TaskState) => Promise<Task[]>
+  loadProjects: () => Promise<ProjectTable[]>
+  getTasks: (projectId: number) => Promise<TaskTable[]>
+  getAllTasks: () => Promise<TaskTable[]>
+  findTasksByState: (state: TaskState) => Promise<TaskTable[]>
   addTask: (
     title: string,
     content: string,
     state: TaskState,
-    projectId: number
-  ) => void
+    projectId: number,
+    tagIds: number[],
+    index: number
+  ) => PromiseExtended<number>
   updateTask: (id: number, changes: any) => void
+
+  addProject: (name: string) => PromiseExtended<number>
+
+  loadTags: () => Promise<TagTable[]>
+  getTasksByTagId: (tagId: number) => Promise<TaskTable[]>
+  addTag: (name: string, parentTagId: number | null, color: string) => PromiseExtended<number>
+  updateTag: (id: number, changes: any) => void
+  deleteTag: (id: number) => void
 }
 
 export const dbRepository: Repository = {
+  addProject(name: string) {
+    return getDB().projects.add({ name })
+  },
+
   async loadProjects() {
     return getDB().projects.toArray()
   },
@@ -39,6 +42,26 @@ export const dbRepository: Repository = {
         return task.projectId === projectId && task.state === TaskState.ACTIVE
       })
       .toArray()
+  },
+
+  addTag(name, parentTagId, color) {
+    return getDB().tags.add({ name, parentTagId, color })
+  },
+
+  async loadTags() {
+    return getDB().tags.toArray()
+  },
+
+  async updateTag(id: number, changes = {}) {
+    return getDB().tags.update(id, changes)
+  },
+
+  async deleteTag(id: number) {
+    return getDB().tags.delete(id)
+  },
+
+  async getTasksByTagId(tagId: number) {
+    return getDB().tasks.filter(task => task.tagIds.includes(tagId) && task.state === TaskState.ACTIVE).toArray()
   },
 
   async getAllTasks() {
@@ -56,18 +79,23 @@ export const dbRepository: Repository = {
   addTask(
     title: string,
     content: string,
-    projectId: number,
     state = TaskState.ACTIVE,
+    projectId: number,
+    tagIds: number[],
+    index: number,
   ) {
     return getDB().tasks.add({
       title,
       content,
       projectId,
       state,
+      tagIds,
+      index,
     })
   },
 
   async updateTask(id: number, changes = {}) {
     return getDB().tasks.update(id, changes)
   },
+
 }

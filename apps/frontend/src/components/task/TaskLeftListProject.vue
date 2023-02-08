@@ -1,38 +1,122 @@
 <script setup lang="ts">
-import { findListProjectByName } from 'services/task'
+import { Icon } from '@iconify/vue'
+import type { MenuItem } from '@imengyu/vue3-context-menu'
+import ContextMenu from '@imengyu/vue3-context-menu'
 import type { TreeOption } from 'naive-ui'
 import { NTree } from 'naive-ui'
-import { onMounted, ref, watchEffect } from 'vue'
-import { useProjectSelectedStatusStore, useTaskStore } from '@/store'
+import { findListProjectByName } from 'services/task'
+import { h, onMounted, ref, watchEffect } from 'vue'
 import 'vue3-emoji-picker/css'
+import { tagCreateViewDialog } from './TagView'
+import { tagRemoveAlert } from './TagView/TagRemoveAlert'
+import { useProjectSelectedStatusStore, useTaskStore } from '@/store'
+import { findListTagByName } from '@/services/task/listTag'
 import ProjectCreateView from '@/components/task/ProjectCreatedView.vue'
+import type { Tag } from '@/services/task/listTag'
+
+const projectSelectedStatusStore = useProjectSelectedStatusStore()
+const taskStore = useTaskStore()
 
 enum TreeRootKeys {
   PROJECT = 100,
   TAG = 200,
 }
 
-const { projectViewRef, projectRender } = useCreateProjectButton()
+const { projectViewRef } = useCreateProjectButton()
 
 function useCreateProjectButton() {
   const projectViewRef = ref()
-  const projectRender = ref(undefined)
-  onMounted(() => {
-    projectRender.value = projectViewRef.value.renderCreateProjectButton
-  })
   return {
-    projectRender,
     projectViewRef,
   }
 }
 
-const projectSelectedStatusStore = useProjectSelectedStatusStore()
-const taskStore = useTaskStore()
+const createRootNodeSuffix = (onclick: (e: Event) => void) => {
+  return () => h(Icon, {
+    icon: 'ic:baseline-plus',
+    width: '20',
+    class: 'invisible rounded-1 hover:bg-gray-2',
+    onclick,
+  })
+}
 
-// fake data to simulate tags render
-const fakeTagsNamesData = ref<string[]>([])
+const createTagLeafPrefix = () => {
+  return () => h(Icon, {
+    icon: 'carbon:tag',
+    width: '14',
+  })
+}
+
+const createOperateNodeBtn = (items: MenuItem[]) => {
+  return h(Icon, {
+    class: 'invisible',
+    icon: 'mdi:dots-horizontal',
+    width: '20',
+    onclick(e: MouseEvent) {
+      e.preventDefault()
+      ContextMenu.showContextMenu({
+        x: e.x,
+        y: e.y,
+        items,
+      })
+    },
+  })
+}
+
+const createTagLeafSuffix = (tag: Tag) => {
+  return () => h('div', { class: 'flex flex-row items-center' },
+    [
+      h(Icon, {
+        icon: 'carbon:circle-solid',
+        width: '8',
+        color: tag.color,
+        class: 'mx-2',
+      }),
+      createOperateNodeBtn([
+        {
+          label: 'edit',
+          onClick: () => tagCreateViewDialog({ tag }),
+        },
+        {
+          label: 'remove',
+          onClick: () => {
+            tagRemoveAlert({
+              tagName: tag.name,
+            }).then((action) => {
+              // eslint-disable-next-line no-console
+              console.log(action)
+              if (action === 'confirm')
+                taskStore.deleteTag(tag.id)
+            })
+          },
+        },
+      ]),
+    ],
+  )
+}
+
+const generateTagChildrenNode = (tags: Tag[]) => {
+  if (!tags.length) {
+    return [
+      {
+        label: '以标签的维度展示不同清单的任务。在添加任务时输入“#”可快速选择标签',
+        placeholder: true,
+      },
+    ]
+  }
+  return tags.map((tag, index) => ({
+    key: TreeRootKeys.TAG + index + 1,
+    label: tag.name,
+    color: tag.color,
+    prefix: createTagLeafPrefix(),
+    suffix: createTagLeafSuffix(tag),
+    isleaf: true,
+  }))
+}
+
 const defaultExpandedKeys = ref<TreeRootKeys[]>([])
 const treeProjectChildren = ref<TreeOption[]>([])
+const treeTagChildren = ref<TreeOption[]>([])
 
 watchEffect(() => {
   treeProjectChildren.value = taskStore.listProjectNames.map(
@@ -42,10 +126,15 @@ watchEffect(() => {
       isleaf: true,
     }),
   )
+
+  treeTagChildren.value = generateTagChildrenNode(taskStore.listTags)
+})
+
+onMounted(() => {
   defaultExpandedKeys.value = [
     ...new Set([
       ...(taskStore.listProjectNames.length ? [] : [TreeRootKeys.PROJECT]),
-      ...(fakeTagsNamesData.value.length ? [] : [TreeRootKeys.TAG]),
+      ...(taskStore.listTags.length ? [] : [TreeRootKeys.TAG]),
       ...projectSelectedStatusStore.listDefaultSelectedKey,
     ]),
   ]
@@ -58,21 +147,24 @@ const data = ref<any[]>([
     checkboxDisabled: false,
     isLeaf: false,
     children: treeProjectChildren,
+    suffix: createRootNodeSuffix((e: Event) => {
+      projectViewRef.value.toggleShowModal()
+      e.stopPropagation()
+    }),
   },
   {
     key: TreeRootKeys.TAG,
     label: '标签',
     checkboxDisabled: false,
     isLeaf: false,
-    children: fakeTagsNamesData.value.length
-      ? fakeTagsNamesData.value
-      : [
-          {
-            label:
-              '以标签的维度展示不同清单的任务。在添加任务时输入“#”可快速选择标签',
-            placeholder: true,
-          },
-        ],
+    children: treeTagChildren,
+    suffix: createRootNodeSuffix((e: Event) => {
+      e.stopPropagation()
+      tagCreateViewDialog().then(() => {
+        // eslint-disable-next-line no-console
+        console.log('done')
+      })
+    }),
   },
 ])
 const nodeProps = ({ option }: { option: TreeOption }) => {
@@ -83,9 +175,16 @@ const nodeProps = ({ option }: { option: TreeOption }) => {
         || option.key === TreeRootKeys.TAG
       )
         return
-      const project = findListProjectByName(option.label)
-      if (project)
-        taskStore.selectProject(project)
+
+      if (option.key! < 200) {
+        const project = findListProjectByName(option.label)
+        if (project)
+          taskStore.selectProject(project)
+      }
+
+      const tag = findListTagByName(option.label)
+      if (tag)
+        taskStore.selectCategory(tag)
     },
     class: option.placeholder ? 'placeholder' : '',
   }
@@ -112,26 +211,19 @@ const onExpandedKey = (key: number[]) => {
 
 <template>
   <NTree
-    v-model:selected-keys="projectSelectedStatusStore.selectedKey"
-    :default-expanded-keys="defaultExpandedKeys"
-    :render-suffix="projectRender"
-    block-line
-    expand-on-click
-    :data="data"
-    :node-props="nodeProps"
-    @update:expanded-keys="onExpandedKey"
+    v-model:selected-keys="projectSelectedStatusStore.selectedKey" :default-expanded-keys="defaultExpandedKeys"
+    block-line expand-on-click :data="data" :node-props="nodeProps" @update:expanded-keys="onExpandedKey"
     @update:selected-keys="changeSelectedKey"
   />
   <ProjectCreateView ref="projectViewRef" />
 </template>
 
 <style>
-.n-tree.n-tree--block-line
-  .n-tree-node:not(.n-tree-node--disabled).n-tree-node--pending {
+.n-tree.n-tree--block-line .n-tree-node:not(.n-tree-node--disabled).n-tree-node--pending {
   background-color: transparent;
 }
-.n-tree.n-tree--block-line
-  .n-tree-node:not(.n-tree-node--disabled).n-tree-node--selected {
+
+.n-tree.n-tree--block-line .n-tree-node:not(.n-tree-node--disabled).n-tree-node--selected {
   background-color: var(--n-node-color-active);
 }
 
@@ -162,5 +254,9 @@ const onExpandedKey = (key: number[]) => {
 
 .dark .placeholder .n-tree-node-content__text {
   color: rgba(156, 163, 175, 0.5);
+}
+
+.n-tree.n-tree--block-line .n-tree-node:not(.n-tree-node--disabled):hover .iconify {
+  visibility: visible;
 }
 </style>

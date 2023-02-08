@@ -1,7 +1,7 @@
 import type { Repository } from './dbRepository'
-import type { ListProject, Project } from './listProject'
+import type { Project } from './listProject'
 import { findListProjectById } from './listProject'
-import type { SmartProject } from './smartProject'
+import type { Tag } from './listTag'
 import { completedSmartProject, trashSmartProject } from './smartProject'
 
 export enum TaskState {
@@ -16,7 +16,8 @@ export interface Task {
   title: string
   state: TaskState
   content: string
-  projectId: number
+  project: Project | undefined
+  index: number
 }
 
 export function createTask(
@@ -25,14 +26,17 @@ export function createTask(
   content = '',
   projectId = 0,
   state = TaskState.ACTIVE,
+  index = 0,
 ): Task {
-  return {
+  const task = {
     id,
     title,
     content,
     state,
-    projectId,
+    project: getTaskFromProject(projectId, state),
+    index,
   }
+  return task
 }
 
 let repository: Repository | undefined
@@ -43,27 +47,24 @@ export function initTask(tasksReactive: Task[] = [], _repository: Repository) {
   tasks = tasksReactive
 }
 
-export async function loadTasks(project: Project) {
-  await project.loadTasks().then((tasksData: any) => {
-    // 每次 loadTasks 的时候都需要清空 tasks
-    // 要注意不可以直接对 tasks 赋值， 因为 tasks 是个 reactive 对象 直接赋值的话会造成响应式对象的丢失问题
-    tasks.length = 0
-    tasksData.forEach(({ title, id, content, projectId: pId, state }: any) => {
-      const task = createTask(title, id, content, pId, state)
-      tasks.unshift(task)
-    })
+export async function loadTasks(category: Project | Tag) {
+  const allTasks = await category.loadTasks()
+  tasks.length = 0
+  allTasks.forEach(({ id, title, content, projectId, state, index }) => {
+    const task = createTask(title, id, content, projectId, state, index)
+    tasks.unshift(task)
   })
+  tasks.sort(_compareTaskIndex())
 }
 
-export async function loadAllTasksNotRemoved(): Promise<Task[]> {
+export async function findAllTasksNotRemoved(): Promise<Task[]> {
   const tasks = (await repository?.getAllTasks()) || []
-
   return tasks
     .filter(({ state }) => {
       return state !== TaskState.REMOVED
     })
-    .map(({ projectId, title, id, content, state }) => {
-      return createTask(title, id, content, projectId, state)
+    .map(({ projectId, title, id, content, state, index }) => {
+      return createTask(title, id, content, projectId, state, index)
     })
 }
 
@@ -72,14 +73,29 @@ export function changeTaskTitle(task: Task, title: string) {
   task.title = title
 }
 
+export function updateTaskIndex(task: Task, newIndex: number) {
+  repository?.updateTask(task.id, { index: newIndex })
+  task.index = newIndex
+}
+
 export function changeTaskContent(task: Task, content: string) {
   repository?.updateTask(task.id, { content })
   task.content = content
 }
 
-export function addTask(task: Task, projectId = -1) {
-  repository?.addTask(task.title, task.content, task.state, projectId)
-  tasks.unshift(task)
+export async function addTask(task: Task, projectId = -1, tags: number[] = []) {
+  const tId = await repository?.addTask(
+    task.title,
+    task.content,
+    task.state,
+    projectId,
+    tags,
+    task.index,
+  )
+  if (tId) {
+    task.id = tId
+    tasks.unshift(task)
+  }
 }
 
 export function removeTask(task: Task) {
@@ -101,13 +117,25 @@ export function restoreTask(task: Task) {
   _removeTask(task)
 }
 
-export function getTaskFromProject(task: Task): SmartProject | ListProject | undefined {
-  if (task.state === TaskState.REMOVED)
+export async function moveTask(task: Task, targetProjectId: number) {
+  const tasks = await findListProjectById(targetProjectId)?.loadTasks()
+  repository?.updateTask(task.id, {
+    projectId: targetProjectId,
+    index: tasks?.length,
+  })
+  _removeTask(task)
+  _updateTaskIndex()
+}
+
+function getTaskFromProject(
+  projectId: number,
+  state: TaskState,
+): Project | undefined {
+  if (state === TaskState.REMOVED)
     return trashSmartProject
-  else if (task.state === TaskState.COMPLETED)
+  else if (state === TaskState.COMPLETED)
     return completedSmartProject
-  else
-    return findListProjectById(task.projectId)
+  else return findListProjectById(projectId)
 }
 
 export function findTaskById(id: number) {
@@ -121,5 +149,18 @@ function _removeTask(task: Task) {
   for (let i = len; i >= 0; i--) {
     if (task.id === tasks[i].id)
       tasks.splice(i, 1)
+  }
+}
+
+function _compareTaskIndex() {
+  return function (a: Task, b: Task) {
+    return b.index - a.index // desc
+  }
+}
+
+function _updateTaskIndex() {
+  for (let i = 0; i < tasks.length; i++) {
+    tasks[i].index = tasks.length - 1 - i
+    updateTaskIndex(tasks[i], tasks[i].index)
   }
 }

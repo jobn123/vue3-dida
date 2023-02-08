@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeMount, ref } from 'vue'
 import TaskEditor from '@/components/task/TaskEditor.vue'
 import TaskLeftListView from '@/components/task/TaskLeftListView.vue'
 import TaskList from '@/components/task/TaskList.vue'
 import { useTaskSidebarDrag } from '@/composable'
-import { useTaskLeftMenuStatusStore } from '@/store'
+import { useTaskLeftMenuStatusStore, useTaskStore, useThemeStore } from '@/store'
+
+const taskStore = useTaskStore()
+const themeStore = useThemeStore()
+
+onBeforeMount(async () => {
+  await taskStore.init()
+})
 
 const AREA_MIN_WIDTH = 240
 
@@ -24,6 +31,7 @@ const { useDividerLeftDrag, useDividerRightDrag } = useTaskSidebarDrag(
   rightContainerElement,
   leftWidthFlex,
   rightWidthFlex,
+  themeStore,
 )
 const taskLeftMenuStatusStore = useTaskLeftMenuStatusStore()
 </script>
@@ -43,8 +51,8 @@ const taskLeftMenuStatusStore = useTaskLeftMenuStatusStore()
     <div
       v-if="taskLeftMenuStatusStore.visible"
       ref="leftResizeElement"
-      class="border-solid cursor-w-resize h-screen border-1 opacity-60 hover-opacity-100"
-      style="flex: 0 0 1px"
+      class="border-solid cursor-w-resize h-screen border-l-2px opacity-60 hover-opacity-100"
+      style="flex: 0 0 6px"
       title="收缩侧边栏"
       @mousedown.prevent="useDividerLeftDrag"
     />
@@ -53,8 +61,8 @@ const taskLeftMenuStatusStore = useTaskLeftMenuStatusStore()
     </div>
     <div
       ref="rightResizeElement"
-      class="border-solid cursor-w-resize h-screen border-1 opacity-60 hover-opacity-100"
-      style="flex: 0 0 1px"
+      class="border-solid cursor-w-resize h-screen border-l-2px opacity-60 hover-opacity-100"
+      style="flex: 0 0 6px"
       title="收缩侧边栏"
       @mousedown.prevent="useDividerRightDrag"
     />

@@ -1,80 +1,100 @@
 import type { Table } from 'dexie'
 import Dexie from 'dexie'
+import type { ProjectTable, TagTable, TaskTable } from './types'
 import { TaskState } from '@/services/task'
 
-export interface Task {
-  id?: number
-  title: string
-  content: string
-  projectId: number
-  state: number
-}
-
-export interface Project {
-  id?: number
-  name: string
-}
-
-export class MySubClassedDexie extends Dexie {
-  tasks!: Table<Task>
-  projects!: Table<Project>
+export class DexieDB extends Dexie {
+  tasks!: Table<TaskTable, number>
+  tags!: Table<TagTable, number>
+  projects!: Table<ProjectTable, number>
 
   constructor() {
-    super('myDatabase')
+    super('dida')
     this.version(1).stores({
-      tasks: '++id, title, content, projectId, state',
+      tasks: '++id, title, content, projectId, state, index',
       projects: '++id, name',
+      tags: '++id, name, parentTagId, color',
     })
   }
 }
 
-let db: MySubClassedDexie
-export async function initDB() {
-  db = new MySubClassedDexie()
-
+let db: DexieDB
+export async function setupDB() {
+  db = new DexieDB()
   // 临时给用户添加数据
-  const projects = await db.projects.toArray()
-  if (projects.length === 0)
-    initData()
+  await initData()
 }
 
 export function getDB() {
   return db
 }
 
-function initData() {
-  db.tasks.add({
+async function initProjectData() {
+  const projects = await db.projects.toArray()
+  if (projects.length !== 0)
+    return
+
+  await db.tasks.add({
     title: '吃饭',
     content: '',
     projectId: 1,
+    tagIds: [],
     state: TaskState.ACTIVE,
+    index: 0,
   })
-  db.tasks.add({
+  await db.tasks.add({
     title: '睡觉',
     content: '',
     projectId: 1,
+    tagIds: [2],
     state: TaskState.ACTIVE,
+    index: 1,
   })
-  db.tasks.add({
+  await db.tasks.add({
     title: '写代码',
     content: '',
     projectId: 1,
+    tagIds: [1],
     state: TaskState.ACTIVE,
+    index: 2,
   })
 
-  db.tasks.add({
+  await db.tasks.add({
     title: '摸鱼2个小时',
     content: '',
     projectId: 2,
+    tagIds: [1, 2],
     state: TaskState.ACTIVE,
+    index: 0,
   })
 
-  db.projects.add({
+  await db.projects.add({
     id: 1,
     name: '生活',
   })
-  db.projects.add({
+  await db.projects.add({
     id: 2,
     name: '工作',
+  })
+}
+
+async function initData() {
+  await initProjectData()
+  await initTagData()
+}
+
+async function initTagData() {
+  const tags = await db.tags.toArray()
+  if (tags.length !== 0)
+    return
+  await db.tags.add({
+    id: 1,
+    name: '标签1',
+    parentTagId: null,
+  })
+  await db.tags.add({
+    id: 2,
+    name: '标签2',
+    parentTagId: null,
   })
 }

@@ -1,13 +1,13 @@
 import type { Repository } from './dbRepository'
+import type { ProjectTable, TaskTable } from '@/db/types'
 
 export interface Project {
+  id: number
   name: string
-  loadTasks: () => any
+  loadTasks: () => Promise<TaskTable[]>
 }
 
-export interface ListProject extends Project {
-  id: number
-}
+export interface ListProject extends Project {}
 
 let repository: Repository | undefined
 let listProjects: ListProject[]
@@ -20,7 +20,7 @@ export function initListProject(
   listProjects = listProjectReactive
 }
 
-export function createListProject(name: string, id: number): ListProject {
+export function createListProject(name: string, id = 0): ListProject {
   return {
     id,
     name,
@@ -32,14 +32,19 @@ export function createListProject(name: string, id: number): ListProject {
 
 export async function loadProjects() {
   return repository!.loadProjects().then((projects) => {
-    projects.forEach((project: any) => {
+    listProjects.length = 0
+    projects.forEach((project: ProjectTable) => {
       listProjects.push(createListProject(project.name, project.id))
     })
   })
 }
 
-export function addListProject(project: ListProject) {
-  // TODO 调用 repository
+export async function addListProject(project: Project) {
+  const pIndex = await repository?.addProject(project.name)
+
+  if (pIndex)
+    project.id = pIndex
+
   listProjects.push(project)
 }
 

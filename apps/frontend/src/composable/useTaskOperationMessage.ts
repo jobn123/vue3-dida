@@ -1,12 +1,13 @@
 import type { MessageReactive } from 'naive-ui'
 import { createDiscreteApi } from 'naive-ui'
 import { h } from 'vue'
-import type { Task } from 'services/task'
+import type { Project, Task } from 'services/task'
 import { useTaskStore } from '@/store'
 
 enum TaskOperationStatus {
   Complete = '已完成',
   Remove = '删除完成',
+  Move = '移动到',
 }
 
 export function useTaskOperationMessage() {
@@ -40,9 +41,11 @@ export function useTaskOperationMessage() {
     }
   }
 
-  function showCompleteMessage(task: Task) {
+  function showCompleteMessage(task: Task, project: Project) {
     const onClick = () => {
       taskStore.restoreTask(task)
+      // 撤销后刷新当前展示的task列表
+      taskStore.selectProject(project)
       removeMessage()
     }
     const content = `${task.title} ${TaskOperationStatus.Complete}`
@@ -62,8 +65,17 @@ export function useTaskOperationMessage() {
     })
   }
 
+  function showMoveMessage(projectName: string) {
+    const content = `${TaskOperationStatus.Move} ${projectName} 清单`
+    messageReactive = message.info(createMessageView(content), {
+      icon: () => null,
+      duration: 1000,
+    })
+  }
+
   return {
     showCompleteMessage,
     showRemoveMessage,
+    showMoveMessage,
   }
 }
